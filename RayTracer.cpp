@@ -87,6 +87,14 @@ glm::vec3 trace(Ray ray, int step)
 		color = color + (rho * reflectedColor);
 	}
 
+	if (obj->isTransparent() && step < MAX_STEPS)
+	{
+		float tco = obj->getTransparencyCoeff();
+		Ray transmittedRay(ray.hit, ray.dir);
+		glm::vec3 transmittedColor = trace(transmittedRay, step + 1);
+		color = (color) + (tco * transmittedColor);
+	}
+
 
 	return color;
 }
@@ -168,7 +176,8 @@ void initialize()
 
 	Sphere *sphere4 = new Sphere(glm::vec3(5.0, -10.0, -60.0), 5.0);
 	sphere4->setColor(glm::vec3(0, 1, 0));   //Set colour to blue
-	sphere4->setReflectivity(true, 0.8);
+	sphere4->setReflectivity(false, 0);
+	sphere4->setTransparency(true, 0.8);
 	sceneObjects.push_back(sphere4);		 //Add sphere to scene objects
 
 	Plane *plane = new Plane (	glm::vec3(-20., -15, -40), //Point A
