@@ -14,12 +14,13 @@
 #include "SceneObject.h"
 #include "Ray.h"
 #include "Plane.h"
+#include "Cuboid.h"
 #include "TextureBMP.h"
 #include <GL/freeglut.h>
 using namespace std;
 
 const float EDIST = 40.0;
-const int NUMDIV = 500;
+const int NUMDIV = 700;
 const int MAX_STEPS = 10;
 const float XMIN = -10.0;
 const float XMAX = 10.0;
@@ -45,14 +46,26 @@ glm::vec3 trace(Ray ray, int step)
     if(ray.index == -1) return backgroundCol;		//no intersection
 	obj = sceneObjects[ray.index];					//object on which the closest point of intersection is found
 
+
+
+
 	if (ray.index == 4)
 	{
 		//Stripe pattern
 		int stripeWidth = 5;
-		int iz = (ray.hit.z) / stripeWidth;
-		int k = iz % 2; //2 colors
-		if (k == 0) color = glm::vec3(0, 1, 0);
-		else color = glm::vec3(1, 1, 0.5);
+		int iz = abs(ray.hit.z) / stripeWidth;
+		int ix = abs(ray.hit.x) / stripeWidth;
+		color = glm::vec3(0);
+
+		if (ray.hit.x > 0) {
+			if (abs(iz % 2) == abs(ix % 2)) color = glm::vec3(1, 1, 1);
+			else color = glm::vec3(0.1, 0.1, 0.1);
+		}
+		if (ray.hit.x <= 0) {
+			if (abs(iz % 2) != abs((ix) % 2)) color = glm::vec3(1, 1, 1);
+			else color = glm::vec3(0.1, 0.1, 0.1);
+		}
+
 		obj->setColor(color);
 
 		float texcoords = (ray.hit.x + 15) / 20;
@@ -60,7 +73,7 @@ glm::vec3 trace(Ray ray, int step)
 		if(texcoords > 0 && texcoords < 1 && texcoordt > 0 && texcoordt < 1)
 		{
 			color=texture.getColorAt(texcoords, texcoordt);
-			obj->setColor(color);
+			// obj->setColor(color);
 		}
 	}
 
@@ -74,7 +87,15 @@ glm::vec3 trace(Ray ray, int step)
 	int lightDist = glm::length(lightVec);
 
 	if (shadowRay.index > -1 && shadowRay.dist < lightDist) {
-		color = 0.2f * obj->getColor(); //0.2 = ambient scale factor
+		SceneObject* shadowObj = sceneObjects[shadowRay.index];
+		if (shadowObj->isTransparent()) {
+			color = color * (shadowObj->getTransparencyCoeff()) * (glm::vec3(shadowObj->getTransparencyCoeff()) + glm::normalize(shadowObj->getColor()));
+		} else {
+			color = 0.2f * obj->getColor(); //0.2 = ambient scale factor
+		}
+
+
+
 	}
 
 	if (obj->isReflective() && step < MAX_STEPS)
@@ -94,7 +115,6 @@ glm::vec3 trace(Ray ray, int step)
 		glm::vec3 transmittedColor = trace(transmittedRay, step + 1);
 		color = (color) + (tco * transmittedColor);
 	}
-
 
 	return color;
 }
@@ -161,24 +181,26 @@ void initialize()
 	sphere1->setColor(glm::vec3(0, 0, 1));   //Set colour to blue
 	// sphere1->setSpecularity(false);
 	sphere1->setReflectivity(true, 0.8);
+	sphere1->setTransparency(false, 0.8);
 	sceneObjects.push_back(sphere1);		 //Add sphere to scene objects
 
 	Sphere *sphere2 = new Sphere(glm::vec3(10.0, 10.0, -60.0), 3.0);
 	sphere2->setColor(glm::vec3(0, 1, 1));   //Set colour to blue
 	sphere2->setShininess(5);
-	sphere2->setReflectivity(true, 0.8);
+	sphere2->setReflectivity(true, 0.2);
 	sceneObjects.push_back(sphere2);		 //Add sphere to scene objects
 
 	Sphere *sphere3 = new Sphere(glm::vec3(5.0, 5.0, -70.0), 4.0);
 	sphere3->setColor(glm::vec3(1, 0, 0));   //Set colour to blue
-	sphere3->setReflectivity(true, 0.8);
+	sphere3->setReflectivity(true, 0.4);
 	sceneObjects.push_back(sphere3);		 //Add sphere to scene objects
 
 	Sphere *sphere4 = new Sphere(glm::vec3(5.0, -10.0, -60.0), 5.0);
-	sphere4->setColor(glm::vec3(0, 1, 0));   //Set colour to blue
+	sphere4->setColor(glm::vec3(0.1, 0.4, 0.1));   //Set colour to blue
 	sphere4->setReflectivity(false, 0);
 	sphere4->setTransparency(true, 0.8);
 	sceneObjects.push_back(sphere4);		 //Add sphere to scene objects
+
 
 	Plane *plane = new Plane (	glm::vec3(-20., -15, -40), //Point A
 								glm::vec3(20., -15, -40), //Point B
@@ -190,13 +212,19 @@ void initialize()
 	sceneObjects.push_back(plane);
 
 
+	Cuboid *cuboid1 = new Cuboid(glm::vec3(10.0, 10.0, -60.0), 5, 5, 5);
+	cuboid1->setColor(glm::vec3(1, 0, 1));
+	cuboid1->setReflectivity(true, 0.2);
+	// cuboid1->setSpecularity(false);
+	sceneObjects.push_back(cuboid1);
+
 }
 
 
 int main(int argc, char *argv[]) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB );
-    glutInitWindowSize(500, 500);
+    glutInitWindowSize(1000, 1000);
     glutInitWindowPosition(20, 20);
     glutCreateWindow("Raytracing");
 
