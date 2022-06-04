@@ -15,12 +15,13 @@
 #include "Ray.h"
 #include "Plane.h"
 #include "Cuboid.h"
+#include "Cylinder.h"
 #include "TextureBMP.h"
 #include <GL/freeglut.h>
 using namespace std;
 
 const float EDIST = 40.0;
-const int NUMDIV = 700;
+const int NUMDIV = 1000;
 const int MAX_STEPS = 10;
 const float XMIN = -10.0;
 const float XMAX = 10.0;
@@ -37,7 +38,7 @@ TextureBMP texture;
 //----------------------------------------------------------------------------------
 glm::vec3 trace(Ray ray, int step)
 {
-	glm::vec3 backgroundCol(0);						//Background colour = (0,0,0)
+	glm::vec3 backgroundCol(1);						//Background colour = (0,0,0)
 	glm::vec3 lightPos(10, 40, -3);					//Light's position
 	glm::vec3 color(0);
 	SceneObject* obj;
@@ -49,7 +50,7 @@ glm::vec3 trace(Ray ray, int step)
 
 
 
-	if (ray.index == 4)
+	if (ray.index == 0)
 	{
 		//Stripe pattern
 		int stripeWidth = 5;
@@ -80,6 +81,7 @@ glm::vec3 trace(Ray ray, int step)
 	// color = obj->getColor();						//Object's colour
 	color = obj->lighting(lightPos, -ray.dir, ray.hit);						//Object's colour
 
+
 	glm::vec3 lightVec = lightPos - ray.hit;
 	Ray shadowRay(ray.hit, lightVec);
 
@@ -89,13 +91,13 @@ glm::vec3 trace(Ray ray, int step)
 	if (shadowRay.index > -1 && shadowRay.dist < lightDist) {
 		SceneObject* shadowObj = sceneObjects[shadowRay.index];
 		if (shadowObj->isTransparent()) {
-			color = color * (shadowObj->getTransparencyCoeff()) * (glm::vec3(shadowObj->getTransparencyCoeff()) + glm::normalize(shadowObj->getColor()));
+			Ray transmittedShadowRay(shadowRay.hit, lightVec);
+			// color = color * shadowObj->getTransparencyCoeff() * shadowObj->lighting(lightPos, shadowRay.dir, shadowRay.hit);
+			float transCoef = shadowObj->getTransparencyCoeff() + 0.2 <= 1.0 ? shadowObj->getTransparencyCoeff() + 0.2 : 1.0;
+			color = color * transCoef * shadowObj->getColor();
 		} else {
 			color = 0.2f * obj->getColor(); //0.2 = ambient scale factor
 		}
-
-
-
 	}
 
 	if (obj->isReflective() && step < MAX_STEPS)
@@ -113,8 +115,15 @@ glm::vec3 trace(Ray ray, int step)
 		float tco = obj->getTransparencyCoeff();
 		Ray transmittedRay(ray.hit, ray.dir);
 		glm::vec3 transmittedColor = trace(transmittedRay, step + 1);
-		color = (color) + (tco * transmittedColor);
+		color = (color + tco * transmittedColor);
 	}
+
+	if (obj->isRefractive() && step << MAX_STEPS)
+	{
+		
+	}
+
+	// color = color + glm::vec3(0.003) * ray.dist; // FOG??
 
 	return color;
 }
@@ -177,31 +186,6 @@ void initialize()
 
 	texture = TextureBMP("Butterfly.bmp");
 
-	Sphere *sphere1 = new Sphere(glm::vec3(-5.0, 0.0, -90.0), 15.0);
-	sphere1->setColor(glm::vec3(0, 0, 1));   //Set colour to blue
-	// sphere1->setSpecularity(false);
-	sphere1->setReflectivity(true, 0.8);
-	sphere1->setTransparency(false, 0.8);
-	sceneObjects.push_back(sphere1);		 //Add sphere to scene objects
-
-	Sphere *sphere2 = new Sphere(glm::vec3(10.0, 10.0, -60.0), 3.0);
-	sphere2->setColor(glm::vec3(0, 1, 1));   //Set colour to blue
-	sphere2->setShininess(5);
-	sphere2->setReflectivity(true, 0.2);
-	sceneObjects.push_back(sphere2);		 //Add sphere to scene objects
-
-	Sphere *sphere3 = new Sphere(glm::vec3(5.0, 5.0, -70.0), 4.0);
-	sphere3->setColor(glm::vec3(1, 0, 0));   //Set colour to blue
-	sphere3->setReflectivity(true, 0.4);
-	sceneObjects.push_back(sphere3);		 //Add sphere to scene objects
-
-	Sphere *sphere4 = new Sphere(glm::vec3(5.0, -10.0, -60.0), 5.0);
-	sphere4->setColor(glm::vec3(0.1, 0.4, 0.1));   //Set colour to blue
-	sphere4->setReflectivity(false, 0);
-	sphere4->setTransparency(true, 0.8);
-	sceneObjects.push_back(sphere4);		 //Add sphere to scene objects
-
-
 	Plane *plane = new Plane (	glm::vec3(-20., -15, -40), //Point A
 								glm::vec3(20., -15, -40), //Point B
 								glm::vec3(20., -15, -200), //Point C
@@ -211,12 +195,43 @@ void initialize()
 	plane->setSpecularity(false);
 	sceneObjects.push_back(plane);
 
+	Sphere *sphere1 = new Sphere(glm::vec3(-5.0, -10.0, -70.0), 5.0);
+	sphere1->setColor(glm::vec3(0.1, 0.1, 1.0));   //Set colour to blue
+	// sphere1->setSpecularity(false);
+	// sphere1->setReflectivity(true, 0.4);
+	sphere1->setTransparency(true, 1.);
+	sceneObjects.push_back(sphere1);		 //Add sphere to scene objects
 
-	Cuboid *cuboid1 = new Cuboid(glm::vec3(10.0, 10.0, -60.0), 5, 5, 5);
+	Sphere *sphere2 = new Sphere(glm::vec3(-5.0, -1.0, -70.0), 4.0);
+	sphere2->setColor(glm::vec3(0, 1, 1));   //Set colour to blue
+	sphere2->setShininess(5);
+	// sphere2->setTransparency(true, 0.8);
+	sceneObjects.push_back(sphere2);		 //Add sphere to scene objects
+
+	Sphere *sphere3 = new Sphere(glm::vec3(-5.0, 6.0, -70.0), 3.0);
+	sphere3->setColor(glm::vec3(1, 0, 0));   //Set colour to blue
+	sphere3->setReflectivity(true, 0.6);
+	sceneObjects.push_back(sphere3);		 //Add sphere to scene objects
+
+	// Sphere *sphere4 = new Sphere(glm::vec3(5.0, -10.0, -60.0), 5.0);
+	// sphere4->setColor(glm::vec3(0.1, 0.4, 0.1));   //Set colour to blue
+	// sphere4->setReflectivity(false, 0);
+	// sphere4->setTransparency(true, 0.8);
+	// sceneObjects.push_back(sphere4);		 //Add sphere to scene objects
+
+
+
+
+	Cuboid *cuboid1 = new Cuboid(glm::vec3(8, -10, -70.0), 9.9, 5, 5);
 	cuboid1->setColor(glm::vec3(1, 0, 1));
-	cuboid1->setReflectivity(true, 0.2);
+	cuboid1->setReflectivity(false, 0.2);
+	cuboid1->setTransparency(true, 0.9);
 	// cuboid1->setSpecularity(false);
 	sceneObjects.push_back(cuboid1);
+
+	Cylinder *cylinder1 = new Cylinder(glm::vec3(8, -5, -70), 2.5, 8);
+	cylinder1->setColor(glm::vec3(1,1,0));
+	sceneObjects.push_back(cylinder1);
 
 }
 
@@ -225,7 +240,7 @@ int main(int argc, char *argv[]) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB );
     glutInitWindowSize(1000, 1000);
-    glutInitWindowPosition(20, 20);
+    glutInitWindowPosition(0, 0);
     glutCreateWindow("Raytracing");
 
     glutDisplayFunc(display);
