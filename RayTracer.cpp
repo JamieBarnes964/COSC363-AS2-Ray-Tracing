@@ -21,7 +21,7 @@
 using namespace std;
 
 const float EDIST = 40.0;
-const int NUMDIV = 1000;
+const int NUMDIV = 500;
 const int MAX_STEPS = 10;
 const float XMIN = -10.0;
 const float XMAX = 10.0;
@@ -189,8 +189,8 @@ void display()
 
 			if (ANITALIASING) {
 				vector<glm::vec3> pixelColors;
-				for (int x=-1; x < 2; x+=2) {
-					for (int y=-1; y<2; y+=2) {
+				for (int x=1; x < 4; x+=2) {
+					for (int y=1; y<4; y+=2) {
 
 						glm::vec3 dir(xp + 0.25 * cellX * x, yp + 0.25 * cellY * y, -EDIST);	//direction of the primary ray
 
@@ -245,7 +245,7 @@ void initialize()
     glClearColor(0, 0, 0, 1);
 
 	texture1 = TextureBMP("Arrow.bmp");
-	texture2 = TextureBMP("moon2.bmp");
+	texture2 = TextureBMP("moon.bmp");
 
 	Plane *plane = new Plane (	glm::vec3(-200., -15, -40), //Point A
 								glm::vec3(200., -15, -40), //Point B
@@ -336,7 +336,7 @@ int main(int argc, char *argv[]) {
 
 		glutInit(&argc, argv);
 		glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB );
-		glutInitWindowSize(1000, 1000);
+		glutInitWindowSize(500, 500);
 		glutInitWindowPosition(0, 0);
 		glutCreateWindow("Raytracing");
 
