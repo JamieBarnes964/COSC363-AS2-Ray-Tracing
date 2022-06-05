@@ -21,7 +21,7 @@
 using namespace std;
 
 const float EDIST = 40.0;
-const int NUMDIV = 1000;
+const int NUMDIV = 700;
 const int MAX_STEPS = 10;
 const float XMIN = -10.0;
 const float XMAX = 10.0;
@@ -46,6 +46,8 @@ glm::vec3 trace(Ray ray, int step)
     ray.closestPt(sceneObjects);					//Compare the ray with all objects in the scene
     if(ray.index == -1) return backgroundCol;		//no intersection
 	obj = sceneObjects[ray.index];					//object on which the closest point of intersection is found
+
+	float airMedium = 1.0;
 
 
 
@@ -90,10 +92,10 @@ glm::vec3 trace(Ray ray, int step)
 
 	if (shadowRay.index > -1 && shadowRay.dist < lightDist) {
 		SceneObject* shadowObj = sceneObjects[shadowRay.index];
-		if (shadowObj->isTransparent()) {
+		if (shadowObj->isTransparent() || shadowObj->isRefractive()) {
 			Ray transmittedShadowRay(shadowRay.hit, lightVec);
 			// color = color * shadowObj->getTransparencyCoeff() * shadowObj->lighting(lightPos, shadowRay.dir, shadowRay.hit);
-			float transCoef = shadowObj->getTransparencyCoeff() + 0.2 <= 1.0 ? shadowObj->getTransparencyCoeff() + 0.2 : 1.0;
+			float transCoef = shadowObj->getTransparencyCoeff() * 0.8 + 0.2;
 			color = color * transCoef * shadowObj->getColor();
 		} else {
 			color = 0.2f * obj->getColor(); //0.2 = ambient scale factor
@@ -118,11 +120,22 @@ glm::vec3 trace(Ray ray, int step)
 		color = (color + tco * transmittedColor);
 	}
 
+
 	if (obj->isRefractive() && step << MAX_STEPS)
 	{
-		
+		glm::vec3 normalVec = obj->normal(ray.hit);
+		glm::vec3 refractedVec(0);
+		if (glm::dot(ray.dir, normalVec) > 0) {
+			float eta = obj->getRefractiveIndex() / airMedium;
+			refractedVec = glm::refract(ray.dir, -normalVec, eta);
+		} else {
+			float eta = airMedium / obj->getRefractiveIndex();
+			refractedVec = glm::refract(ray.dir, normalVec, eta);
+		}
+		Ray refractedRay(ray.hit, refractedVec);
+		glm::vec3 transmittedColor = trace(refractedRay, step + 1);
+		color = color + transmittedColor * obj->getRefractionCoeff();
 	}
-
 	// color = color + glm::vec3(0.003) * ray.dist; // FOG??
 
 	return color;
@@ -195,6 +208,16 @@ void initialize()
 	plane->setSpecularity(false);
 	sceneObjects.push_back(plane);
 
+
+	Plane *banner = new Plane (	glm::vec3(-20., -5, -90), //Point A
+								glm::vec3(-20., 5, -90), //Point B
+								glm::vec3(20., 5, -90), //Point C
+								glm::vec3(20., -5, -90)); //Point D
+	banner->setColor(glm::vec3(0.8,0.8,0));
+	// plane->setReflectivity(true, 0.2);
+	banner->setSpecularity(false);
+	sceneObjects.push_back(banner);
+
 	Sphere *sphere1 = new Sphere(glm::vec3(-5.0, -10.0, -70.0), 5.0);
 	sphere1->setColor(glm::vec3(0.1, 0.1, 1.0));   //Set colour to blue
 	// sphere1->setSpecularity(false);
@@ -203,9 +226,10 @@ void initialize()
 	sceneObjects.push_back(sphere1);		 //Add sphere to scene objects
 
 	Sphere *sphere2 = new Sphere(glm::vec3(-5.0, -1.0, -70.0), 4.0);
-	sphere2->setColor(glm::vec3(0, 1, 1));   //Set colour to blue
-	sphere2->setShininess(5);
+	sphere2->setColor(glm::vec3(1, 1, 1));   //Set colour to blue
+	// sphere2->setShininess(5);
 	// sphere2->setTransparency(true, 0.8);
+	sphere2->setRefractivity(true, 1.0, 1.5);
 	sceneObjects.push_back(sphere2);		 //Add sphere to scene objects
 
 	Sphere *sphere3 = new Sphere(glm::vec3(-5.0, 6.0, -70.0), 3.0);
@@ -219,9 +243,6 @@ void initialize()
 	// sphere4->setTransparency(true, 0.8);
 	// sceneObjects.push_back(sphere4);		 //Add sphere to scene objects
 
-
-
-
 	Cuboid *cuboid1 = new Cuboid(glm::vec3(8, -10, -70.0), 9.9, 5, 5);
 	cuboid1->setColor(glm::vec3(1, 0, 1));
 	cuboid1->setReflectivity(false, 0.2);
@@ -229,7 +250,14 @@ void initialize()
 	// cuboid1->setSpecularity(false);
 	sceneObjects.push_back(cuboid1);
 
-	Cylinder *cylinder1 = new Cylinder(glm::vec3(8, -5, -70), 2.5, 8);
+	// Cuboid *cuboid2 = new Cuboid(glm::vec3(-4, -10, -90.0), 5, 5, 5);
+	// cuboid2->setColor(glm::vec3(1, 0, 1));
+	// // cuboid2->setReflectivity(false, 0.2);
+	// // cuboid2->setTransparency(true, 0.9);
+	// // cuboid1->setSpecularity(false);
+	// sceneObjects.push_back(cuboid2);
+
+Cylinder *cylinder1 = new Cylinder(glm::vec3(8, -5, -70), 2.5, 8);
 	cylinder1->setColor(glm::vec3(1,1,0));
 	sceneObjects.push_back(cylinder1);
 
@@ -237,15 +265,21 @@ void initialize()
 
 
 int main(int argc, char *argv[]) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB );
-    glutInitWindowSize(1000, 1000);
-    glutInitWindowPosition(0, 0);
-    glutCreateWindow("Raytracing");
+	try {
 
-    glutDisplayFunc(display);
-    initialize();
+		glutInit(&argc, argv);
+		glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB );
+		glutInitWindowSize(1000, 1000);
+		glutInitWindowPosition(0, 0);
+		glutCreateWindow("Raytracing");
 
-    glutMainLoop();
-    return 0;
+		glutDisplayFunc(display);
+		initialize();
+
+		glutMainLoop();
+		return 0;
+	}
+	catch (std::exception& e) {
+		cerr << "error: " << e.what() << "\n";
+	}
 }
