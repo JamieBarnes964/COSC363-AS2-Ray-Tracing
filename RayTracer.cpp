@@ -21,15 +21,19 @@
 using namespace std;
 
 const float EDIST = 40.0;
-const int NUMDIV = 700;
+const int NUMDIV = 1000;
 const int MAX_STEPS = 10;
 const float XMIN = -10.0;
 const float XMAX = 10.0;
 const float YMIN = -10.0;
 const float YMAX = 10.0;
 
+const bool ANITALIASING = true;
+const bool DO_FOG = true;
+
 vector<SceneObject*> sceneObjects;
-TextureBMP texture;
+TextureBMP texture1;
+TextureBMP texture2;
 
 
 //---The most important function in a ray tracer! ----------------------------------
@@ -38,8 +42,8 @@ TextureBMP texture;
 //----------------------------------------------------------------------------------
 glm::vec3 trace(Ray ray, int step)
 {
-	glm::vec3 backgroundCol(0);						//Background colour = (0,0,0)
-	glm::vec3 lightPos(10, 40, -3);					//Light's position
+	glm::vec3 backgroundCol(0.9, 0.9, 0.9);						//Background colour = (0,0,0)
+	glm::vec3 lightPos(20, 60, -30);					//Light's position
 	glm::vec3 color(0);
 	SceneObject* obj;
 
@@ -70,25 +74,26 @@ glm::vec3 trace(Ray ray, int step)
 		}
 
 		obj->setColor(color);
-
-		float texcoords = (ray.hit.x + 15) / 20;
-		float texcoordt = 1 - (ray.hit.z + 90) / 30;
-		if(texcoords > 0 && texcoords < 1 && texcoordt > 0 && texcoordt < 1)
-		{
-			color=texture.getColorAt(texcoords, texcoordt);
-			// obj->setColor(color);
-		}
 	}
 
 	if (ray.index == 1)
 	{
 		float texcoords = fmod((ray.hit.x) / 5, 1) >= 0 ? fmod((ray.hit.x) / 5, 1) : 1 + fmod((ray.hit.x) / 5, 1);
 		float texcoordt = fmod((ray.hit.y) / 5, 1) >= 0 ? fmod((ray.hit.y) / 5, 1) : 1 + fmod((ray.hit.y) / 5, 1);
-		if(texcoordt > 0 && texcoordt < 1)
-		{
-			color=texture.getColorAt(texcoords, texcoordt);
-			obj->setColor(color);
-		}
+
+		color=texture1.getColorAt(texcoords, texcoordt);
+		obj->setColor(color);
+	}
+
+	if (ray.index == 2)
+	{
+		float texcoords = 0.5 + (glm::atan(obj->normal(ray.hit).x, obj->normal(ray.hit).z)) / (2 * M_PI);
+		float texcoordt = 0.5 + (glm::asin(obj->normal(ray.hit).y)) / M_PI;
+		color=texture2.getColorAt(
+			texcoords,
+			texcoordt
+		);
+		obj->setColor(color);
 	}
 
 
@@ -105,16 +110,14 @@ glm::vec3 trace(Ray ray, int step)
 	if (shadowRay.index > -1 && shadowRay.dist < lightDist) {
 		SceneObject* shadowObj = sceneObjects[shadowRay.index];
 		if (shadowObj->isTransparent() || shadowObj->isRefractive()) {
-			Ray transmittedShadowRay(shadowRay.hit, lightVec);
-			// color = color * shadowObj->getTransparencyCoeff() * shadowObj->lighting(lightPos, shadowRay.dir, shadowRay.hit);
-			float transCoef = shadowObj->getTransparencyCoeff() * 0.8 + 0.2;
-			color = color * transCoef * shadowObj->getColor();
+			color = color * glm::vec3(0.6) + shadowObj->getColor() * glm::vec3(0.2);
 		} else {
 			color = 0.2f * obj->getColor(); //0.2 = ambient scale factor
 		}
 	}
 
 	if (obj->isReflective() && step < MAX_STEPS)
+
 	{
 		float rho = obj->getReflectionCoeff();
 		glm::vec3 normalVec = obj->normal(ray.hit);
@@ -129,12 +132,13 @@ glm::vec3 trace(Ray ray, int step)
 		float tco = obj->getTransparencyCoeff();
 		Ray transmittedRay(ray.hit, ray.dir);
 		glm::vec3 transmittedColor = trace(transmittedRay, step + 1);
-		color = (color + tco * transmittedColor);
+		color = color * (1-tco) + transmittedColor * tco;
 	}
 
 
 	if (obj->isRefractive() && step << MAX_STEPS)
 	{
+		float rco = obj->getRefractiveIndex();
 		glm::vec3 normalVec = obj->normal(ray.hit);
 		glm::vec3 refractedVec(0);
 		if (glm::dot(ray.dir, normalVec) > 0) {
@@ -146,9 +150,13 @@ glm::vec3 trace(Ray ray, int step)
 		}
 		Ray refractedRay(ray.hit, refractedVec);
 		glm::vec3 transmittedColor = trace(refractedRay, step + 1);
-		color = color + transmittedColor * obj->getRefractionCoeff();
+		color = color * (1-rco) + rco * transmittedColor;
 	}
-	// color = color + glm::vec3(0.003) * ray.dist; // FOG??
+
+	if (DO_FOG) {
+		color = color + glm::vec3(0.0045) * (ray.dist > 50 ? ray.dist - 50 : 0);
+		if (ray.dist >= 250) color = backgroundCol;
+	}
 
 	return color;
 }
@@ -160,8 +168,8 @@ glm::vec3 trace(Ray ray, int step)
 void display()
 {
 	float xp, yp;  //grid point
-	float cellX = (XMAX - XMIN) / NUMDIV;  //cell width
-	float cellY = (YMAX - YMIN) / NUMDIV;  //cell height
+	float cellX = (XMAX - XMIN) / (NUMDIV);  //cell width
+	float cellY = (YMAX - YMIN) / (NUMDIV);  //cell height
 	glm::vec3 eye(0., 0., 0.);
 
 	glClear(GL_COLOR_BUFFER_BIT);
@@ -175,15 +183,41 @@ void display()
 		xp = XMIN + i * cellX;
 		for (int j = 0; j < NUMDIV; j++)
 		{
-
 			yp = YMIN + j * cellY;
 
-			glm::vec3 dir(xp + 0.5 * cellX, yp + 0.5 * cellY, -EDIST);	//direction of the primary ray
+			glm::vec3 pixCol(0);
 
-			Ray ray = Ray(eye, dir);
+			if (ANITALIASING) {
+				vector<glm::vec3> pixelColors;
+				for (int x=-1; x < 2; x+=2) {
+					for (int y=-1; y<2; y+=2) {
 
-			glm::vec3 col = trace(ray, 1); //Trace the primary ray and get the colour value
-			glColor3f(col.r, col.g, col.b);
+						glm::vec3 dir(xp + 0.25 * cellX * x, yp + 0.25 * cellY * y, -EDIST);	//direction of the primary ray
+
+						Ray ray = Ray(eye, dir);
+
+						glm::vec3 col = trace(ray, 1); //Trace the primary 1,1,1ray and get the colour value
+
+						pixelColors.push_back(col);
+					}
+				}
+				// AVG COLORS
+				for (glm::vec3 col: pixelColors) {
+					pixCol = pixCol + col;
+				}
+				pixCol = (pixCol) * (float)0.25;
+			} else {
+				glm::vec3 dir(xp + 5 * cellX, yp + 0.5 * cellY, -EDIST);	//direction of the primary ray
+
+				Ray ray = Ray(eye, dir);
+
+				pixCol = trace(ray, 1); //Trace the primary ray and get the colour value
+			}
+
+
+
+
+			glColor3f(pixCol.r, pixCol.g, pixCol.b);
 			glVertex2f(xp, yp);				//Draw each cell with its color value
 			glVertex2f(xp + cellX, yp);
 			glVertex2f(xp + cellX, yp + cellY);
@@ -210,7 +244,8 @@ void initialize()
 
     glClearColor(0, 0, 0, 1);
 
-	texture = TextureBMP("Arrow.bmp");
+	texture1 = TextureBMP("Arrow.bmp");
+	texture2 = TextureBMP("moon2.bmp");
 
 	Plane *plane = new Plane (	glm::vec3(-200., -15, -40), //Point A
 								glm::vec3(200., -15, -40), //Point B
@@ -231,6 +266,20 @@ void initialize()
 	banner->setSpecularity(false);
 	sceneObjects.push_back(banner);
 
+	Sphere *moon = new Sphere (glm::vec3(8, 9.5, -70), 3);
+	// Sphere *moon = new Sphere (glm::vec3(0, 0, -60.0), 5);
+	moon->setSpecularity(false);
+	moon->setColor(glm::vec3(0));
+	sceneObjects.push_back(moon);
+
+	Cylinder *pole1 = new Cylinder( glm::vec3(-15., -15, -80), 0.5, 21);
+	pole1->setColor(glm::vec3(0.4,0.4,1));
+	sceneObjects.push_back(pole1);
+
+	Cylinder *pole2 = new Cylinder( glm::vec3(15., -15, -80), 0.5, 21);
+	pole2->setColor(glm::vec3(0.4,0.4,1));
+	sceneObjects.push_back(pole2);
+
 
 
 	// Sphere Stack
@@ -238,11 +287,11 @@ void initialize()
 	sphere1->setColor(glm::vec3(0.1, 0.1, 1.0));   //Set colour to blue
 	// sphere1->setSpecularity(false);
 	// sphere1->setReflectivity(true, 0.4);
-	sphere1->setTransparency(true, 0.8);
+	sphere1->setTransparency(true, 0.6);
 	sceneObjects.push_back(sphere1);		 //Add sphere to scene objects
 
 	Sphere *sphere2 = new Sphere(glm::vec3(-5.0, 2.5, -70.0), 2.5);
-	sphere2->setColor(glm::vec3(1, 1, 1));   //Set colour to blue
+	sphere2->setColor(glm::vec3(0));   //Set colour to blue
 	// sphere2->setShininess(5);
 	// sphere2->setTransparency(true, 0.8);
 	sphere2->setRefractivity(true, 1.0, 1.33);
@@ -257,7 +306,7 @@ void initialize()
 
 
 	Cylinder *cylinder1 = new Cylinder(glm::vec3(8, -1.5, -70), 2.5, 8);
-		cylinder1->setColor(glm::vec3(1,1,1));
+		cylinder1->setColor(glm::vec3(0));
 		cylinder1->setRefractivity(true, 1.0, 1.33);
 		sceneObjects.push_back(cylinder1);
 
@@ -268,6 +317,14 @@ void initialize()
 		// cuboid1->setTransparency(true, 0.8);
 		// cuboid1->setSpecularity(false);
 		sceneObjects.push_back(cuboid1);
+
+	for (int i=1; i < 6; i++) {
+		Cuboid *pillar = new Cuboid(glm::vec3(8 - i, -8.25 - i, -70.0 - 30 * i), 13 - i * 2, 5, 5);
+		pillar->setColor(glm::vec3(0.8, 0.2, 0.8));
+		sceneObjects.push_back(pillar);
+	}
+
+
 
 
 
