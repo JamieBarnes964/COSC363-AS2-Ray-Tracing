@@ -27,13 +27,16 @@ float Cylinder::intersect(glm::vec3 p0, glm::vec3 dir)
 
 	if (t1 < 0 && t2 < 0) return -1;
 
+
 	if (min(t1, t2) < 0) {
-		if (
-			(p0 + min(t1, t2) * dir).y < center.y + height &&
-			(p0 + min(t1, t2) * dir).y > center.y &&
-			((p0 + max(t1, t2) * dir).y > center.y + height ||
-			(p0 + max(t1, t2) * dir).y < center.y)
-		) return -1;
+		if (p0.y > center.y || p0.y < center.y + height) {
+			if (
+				(p0 + min(t1, t2) * dir).y < center.y + height &&
+				(p0 + min(t1, t2) * dir).y > center.y &&
+				((p0 + max(t1, t2) * dir).y > center.y + height ||
+				(p0 + max(t1, t2) * dir).y < center.y)
+			) return -1;
+		}
 	}
 
 	if ((p0 + min(t1, t2) * dir).y > (center.y + height)) {
